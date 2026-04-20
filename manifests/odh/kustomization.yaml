@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# ODH-specific manifests.
+#
+# imagestream.yaml is the only one applied by default — it registers the
+# image with the ODH dashboard image picker.
+#
+# notebook-sample.yaml is a reference and should NOT be applied via this
+# Kustomization; developers create Notebook CRs through the dashboard.
+resources:
+  - imagestream.yaml

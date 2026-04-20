@@ -1,0 +1,85 @@
+name: build-image
+
+on:
+  push:
+    branches: [main]
+    tags:     ['v*']
+    paths:
+      - 'container/**'
+      - 'scripts/**'
+      - 'config/**'
+      - 'dags/**'
+      - 'dbt_project/**'
+      - '.github/workflows/build.yaml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag (defaults to short SHA)"
+        required: false
+
+env:
+  REGISTRY:   ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/codeserver-airflow-dbt
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write    # for cosign / OIDC signing if added later
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: tag
+        run: |
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: container/Dockerfile
+          failure-threshold: warning
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: container/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Override Nexus URL for public CI builds. In BBH CI, set these
+          # as org-level variables pointing at the internal mirror.
+          build-args: |
+            NEXUS_URL=${{ vars.NEXUS_URL || 'https://pypi.org' }}
+            AIRFLOW_VERSION=3.1.7
+            PYTHON_VERSION=3.11
+            DBT_VERSION=1.8.9
+            DBT_ORACLE_VERSION=1.8.3
+            COSMOS_VERSION=1.7.0

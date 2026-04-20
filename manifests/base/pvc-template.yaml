@@ -1,0 +1,25 @@
+# Per-user PVC template.
+#
+# ODH normally creates PVCs automatically when a developer launches a
+# workbench from the dashboard. This template exists for two cases:
+#   1. Pre-provisioning a PVC outside the dashboard (e.g. with a larger size)
+#   2. Reference for the expected access mode / storage class
+#
+# The PVC MUST be ReadWriteOnce — Airflow's SQLite metadata DB does not
+# tolerate multi-writer access.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: codeserver-dev-home
+  labels:
+    opendatahub.io/dashboard: "true"
+  annotations:
+    description: "Home directory PVC for Code Server + Airflow + dbt workbench"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  # Override per cluster — ocs-storagecluster-ceph-rbd is typical for ODF
+  storageClassName: ocs-storagecluster-ceph-rbd

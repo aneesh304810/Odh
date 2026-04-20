@@ -1,0 +1,55 @@
+# ODH ImageStream.
+#
+# The Open Data Hub dashboard discovers notebook/workbench images by
+# scanning ImageStreams with the label
+#   opendatahub.io/notebook-image: "true"
+# in the redhat-ods-applications namespace (or wherever ODH is installed).
+#
+# The annotations drive what shows up in the dashboard UI:
+#   - notebook-image-name:    display name
+#   - notebook-image-desc:    tooltip description
+#   - notebook-image-order:   sort order in the picker
+#   - notebook-python-dependencies: rendered as a dependency badge
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: codeserver-airflow-dbt
+  namespace: redhat-ods-applications
+  labels:
+    opendatahub.io/notebook-image: "true"
+    app.kubernetes.io/part-of: codeserver-airflow-dbt
+  annotations:
+    opendatahub.io/notebook-image-name: "Code Server + Airflow + dbt"
+    opendatahub.io/notebook-image-desc: >-
+      VS Code (Code Server) with a pre-configured, per-user Apache Airflow
+      standalone and dbt-oracle + Cosmos. Includes Oracle Instant Client.
+    opendatahub.io/notebook-image-url: "https://github.com/bbh/odh-airflow-dbt-codeserver"
+    opendatahub.io/notebook-image-order: "50"
+    opendatahub.io/recommended-accelerators: "[]"
+spec:
+  lookupPolicy:
+    local: true
+  tags:
+    - name: "2026.1"
+      from:
+        kind: DockerImage
+        # Change this to match wherever `make push` sends the image.
+        name: image-registry.openshift-image-registry.svc:5000/odh-images/codeserver-airflow-dbt:2026.1
+      annotations:
+        opendatahub.io/notebook-python-dependencies: |
+          [
+            {"name": "Apache Airflow",  "version": "3.1.7"},
+            {"name": "dbt-core",        "version": "1.8.9"},
+            {"name": "dbt-oracle",      "version": "1.8.3"},
+            {"name": "Astronomer Cosmos","version": "1.7.0"},
+            {"name": "oracledb",        "version": "2.x"}
+          ]
+        opendatahub.io/notebook-software: |
+          [
+            {"name": "Python",      "version": "3.11"},
+            {"name": "code-server", "version": "4.x"},
+            {"name": "Oracle IC",   "version": "21.13"}
+          ]
+        opendatahub.io/image-tag-outdated: "false"
+      referencePolicy:
+        type: Source

@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: my_first_model
+    description: "Smoke-test model — static single-row view."
+    columns:
+      - name: id
+        description: "Constant 1."
+        tests:
+          - not_null
+          - unique
+      - name: message
+        description: "Hello message from dbt-oracle."
+        tests:
+          - not_null
+
+  - name: my_second_model
+    description: "Derived view — uppercases my_first_model.message."
+    columns:
+      - name: id
+        tests:
+          - not_null
+          - unique
+      - name: shouty_message
+        tests:
+          - not_null

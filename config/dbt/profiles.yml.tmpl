@@ -1,0 +1,21 @@
+# This file is a TEMPLATE. The entrypoint runs `envsubst` on it at pod
+# startup and writes the result to ~/.dbt/profiles.yml.
+#
+# Expected env vars (sourced from the Notebook CR -> per-user Secret):
+#   ORACLE_HOST, ORACLE_PORT, ORACLE_SERVICE, ORACLE_USER, ORACLE_PASSWORD,
+#   ORACLE_SCHEMA (optional, defaults to $ORACLE_USER)
+
+odh_dev:
+  target: dev
+  outputs:
+    dev:
+      type: oracle
+      host: ${ORACLE_HOST}
+      port: ${ORACLE_PORT}
+      service: ${ORACLE_SERVICE}
+      user: ${ORACLE_USER}
+      password: ${ORACLE_PASSWORD}
+      schema: ${ORACLE_SCHEMA}
+      threads: 4
+      # dbt-oracle uses the thin python-oracledb driver by default
+      protocol: tcp

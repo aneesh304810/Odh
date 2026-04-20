@@ -1,0 +1,85 @@
+# Sample Notebook custom resource.
+#
+# When a developer clicks "Create workbench" in the ODH dashboard with our
+# image selected, ODH creates a Notebook CR like this one. You usually
+# don't hand-write these — but this template is useful for:
+#
+#   1. Documenting the exact env vars / mounts the entrypoint expects
+#   2. Pre-provisioning a workbench via GitOps (ArgoCD) for shared users
+#   3. Debugging when the dashboard-created CR is misbehaving
+#
+# Replace:
+#   - metadata.name / namespace     -> your developer's name + namespace
+#   - spec.template.spec...         -> anything else (GPU, resources)
+#   - envFrom.secretRef.name        -> the developer's Oracle Secret
+apiVersion: kubeflow.org/v1
+kind: Notebook
+metadata:
+  name: aneesh-codeserver
+  namespace: rhods-notebooks        # ODH user namespace; often per-user
+  labels:
+    app: aneesh-codeserver
+    opendatahub.io/dashboard: "true"
+    opendatahub.io/odh-managed: "true"
+  annotations:
+    notebooks.opendatahub.io/inject-oauth: "true"
+    notebooks.opendatahub.io/last-image-selection: "codeserver-airflow-dbt:2026.1"
+    opendatahub.io/username: "aneesh"
+spec:
+  template:
+    spec:
+      serviceAccountName: codeserver-workbench
+      enableServiceLinks: false
+      containers:
+        - name: aneesh-codeserver
+          image: image-registry.openshift-image-registry.svc:5000/odh-images/codeserver-airflow-dbt:2026.1
+          imagePullPolicy: Always
+          workingDir: /opt/app-root/src
+          ports:
+            - name: notebook-port    # code-server
+              containerPort: 8787
+              protocol: TCP
+            - name: airflow          # airflow webserver
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: NOTEBOOK_ARGS
+              value: >-
+                --ServerApp.port=8787
+                --ServerApp.token=''
+                --ServerApp.password=''
+                --ServerApp.base_url=/notebook/rhods-notebooks/aneesh-codeserver
+            - name: NB_PREFIX
+              value: /notebook/rhods-notebooks/aneesh-codeserver
+            - name: AIRFLOW_ADMIN_USER
+              value: aneesh
+          envFrom:
+            - secretRef:
+                name: oracle-dev
+          resources:
+            requests:
+              cpu: "1"
+              memory: 4Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+          volumeMounts:
+            - name: home
+              mountPath: /opt/app-root/src
+          livenessProbe:
+            httpGet:
+              path: /notebook/rhods-notebooks/aneesh-codeserver/api
+              port: notebook-port
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /notebook/rhods-notebooks/aneesh-codeserver/api
+              port: notebook-port
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: aneesh-codeserver-home
