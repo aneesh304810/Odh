@@ -1,0 +1,92 @@
+# OpenShift BuildConfig for the Code Server + Airflow + dbt image.
+#
+# Used by the Jenkins pipeline (see jenkins/Jenkinsfile) to produce the
+# container image without needing Docker Desktop / Podman on developer
+# laptops. Build runs on the OpenShift cluster itself via Source-to-Image
+# in Docker strategy (uses buildah under the hood).
+#
+# Apply once:
+#   oc apply -f manifests/build/buildconfig.yaml -n odh-images
+#
+# Trigger manually:
+#   oc start-build codeserver-airflow-dbt -n odh-images --follow
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: codeserver-airflow-dbt
+  namespace: odh-images
+  labels:
+    app: codeserver-airflow-dbt
+    app.kubernetes.io/part-of: codeserver-airflow-dbt
+spec:
+  # Where the resulting image goes. This ImageStreamTag must exist before
+  # the first build; see manifests/build/imagestream.yaml.
+  output:
+    to:
+      kind: ImageStreamTag
+      name: codeserver-airflow-dbt:latest
+
+  # Build source = this git repo. The Jenkinsfile overrides the ref at
+  # build time so feature branches produce tagged images.
+  source:
+    type: Git
+    git:
+      uri: https://github.com/aneesh304810/Odh.git
+      ref: main
+    contextDir: .
+    sourceSecret:
+      # Only needed if the repo is private. Create with:
+      #   oc create secret generic git-creds \
+      #     --from-literal=username=<gh-user> \
+      #     --from-literal=password=<gh-pat> \
+      #     --type=kubernetes.io/basic-auth
+      name: git-creds
+
+  # Docker strategy (buildah-backed). Uses container/Dockerfile.
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: container/Dockerfile
+      # Build args — map directly to ARG lines in the Dockerfile.
+      # Override per environment by patching the BuildConfig or via
+      # `oc start-build --env`.
+      buildArgs:
+        - name: NEXUS_URL
+          value: https://nexus.bbh.com
+        - name: AIRFLOW_VERSION
+          value: "3.1.7"
+        - name: PYTHON_VERSION
+          value: "3.11"
+        - name: DBT_VERSION
+          value: "1.8.9"
+        - name: DBT_ORACLE_VERSION
+          value: "1.8.3"
+        - name: COSMOS_VERSION
+          value: "1.7.0"
+      # Pull secret for the base image if the ODH workbench image lives
+      # behind a registry that needs auth. Link this SA separately:
+      #   oc secrets link builder <pull-secret> --for=pull -n odh-images
+      pullSecret:
+        name: odh-registry-pull
+
+  # Resources for the build pod. Airflow + Oracle IC install is memory-hungry.
+  resources:
+    requests:
+      cpu: "1"
+      memory: 2Gi
+    limits:
+      cpu: "4"
+      memory: 6Gi
+
+  # No automatic triggers — Jenkins decides when to build.
+  # (Remove the `triggers` key entirely to disable all auto-rebuilds,
+  # including ImageChange on the base image.)
+  triggers: []
+
+  # Longer timeout because pulling ODH base + Oracle IC + Airflow deps
+  # can easily exceed the 10-minute default on a cold cache.
+  completionDeadlineSeconds: 1800
+
+  # Keep the last 5 successful + 3 failed builds for debugging.
+  successfulBuildsHistoryLimit: 5
+  failedBuildsHistoryLimit: 3
